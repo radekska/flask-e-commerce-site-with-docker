@@ -8,16 +8,8 @@ class Product(db.Model):
     name = db.Column(db.String(128))
 
     def __init__(self, product_id, name):
-        self._id = product_id
-        self._name = name
-
-    @property
-    def product_name(self):
-        return self._name
-
-    @product_name.setter
-    def product_name(self, name: str):
-        self._name = name
+        self.id = product_id
+        self.name = name
 
     @classmethod
     def find_by_id(cls, product_id):
@@ -38,6 +30,6 @@ class Product(db.Model):
     @property
     def json(self):
         return {
-            "id": self._id,
-            "name": self._name
+            "id": self.id,
+            "name": self.name
         }
