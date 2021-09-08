@@ -26,10 +26,10 @@ def get_product(product_id: str) -> Union[Response, Tuple[str, int]]:
 @app.route("/product", methods=["POST"])
 def post_product() -> Union[Tuple[str, int], Tuple[Response, int]]:
     product_name = request.json.get("name")
+
     if not product_name:
         return f"'name' data has not been provided.", 400
 
-    print(product_name)
     new_product = Product(None, product_name)
     new_product.save_to_db()
     return jsonify(new_product.json), 201
@@ -43,10 +43,14 @@ def update_product(product_id: str) -> Union[Tuple[Response, int], Tuple[str, in
 
     product = Product.find_by_id(product_id)
     if product is not None:
-        product.product_name = updated_product_name
+        product.name = updated_product_name
         product.save_to_db()
-        return jsonify(product.json), 200
-    return f"Product with id {id} not found.", 404
+        product = product.json
+        product.update({
+            "message": "Item updated."
+        })
+        return jsonify(product), 200
+    return f"Product with id {product_id} not found.", 404
 
 
 @app.route("/product/<int:product_id>", methods=["DELETE"])
