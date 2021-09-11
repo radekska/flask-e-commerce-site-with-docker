@@ -1,8 +1,12 @@
-from flask import Flask, request, jsonify
-from flask.wrappers import Response
-from typing import Union, Tuple
-from db import db
+from typing import Tuple, Union
+
 from Product import Product
+from flask import Flask, jsonify, request
+from flask.wrappers import Response
+from sqlalchemy import exc
+
+from db import db
+from .logger import WEB_LOGGER
 
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "mysql://root:password@db/products"
@@ -11,16 +15,29 @@ db.init_app(app)
 
 @app.route("/products")
 def get_products() -> Response:
-    products = [product.json for product in Product.find_all()]
-    return jsonify(products)
+    try:
+        products = [product.json for product in Product.find_all()]
+        return jsonify(products)
+    except exc.SQLAlchemyError:
+        message = "An exception occurred while retrieving all products."
+        WEB_LOGGER.exception(message)
+        return message, 500
 
 
 @app.route("/product/<int:product_id>")
 def get_product(product_id: str) -> Union[Response, Tuple[str, int]]:
-    product = Product.find_by_id(product_id)
-    if product is not None:
-        return jsonify(product.json)
-    return f"Product with id {product_id} not found.", 404
+    WEB_LOGGER.debug(f"GET /product/{product_id}")
+    try:
+        product = Product.find_by_id(product_id)
+        if product is not None:
+            return jsonify(product.json)
+        WEB_LOGGER.warning(f"GET /product/{product_id}: item not found.")
+        return f"Product with id {product_id} not found.", 404
+    except exc.SQLAlchemyError:
+        message = f"An exception occurred while retrieving product with id: {product_id}."
+        WEB_LOGGER.exception(message)
+        return message, 500
+
 
 
 @app.route("/product", methods=["POST"])
