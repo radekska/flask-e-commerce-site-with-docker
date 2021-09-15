@@ -1,20 +1,56 @@
+import configparser
+import os
 from typing import Tuple, Union
 
+import pydevd_pycharm
 from Product import Product
 from flask import Flask, jsonify, request
 from flask.wrappers import Response
+from logger import WEB_LOGGER
 from sqlalchemy import exc
 
 from db import db
-from .logger import WEB_LOGGER
+
+# Setup Pycharm debugger connecting to container.
+debug = os.getenv("DEBUG", False)
+if debug == "True":
+    WEB_LOGGER.info("Connecting to PyCharm debugger.")
+    pydevd_pycharm.settrace(
+        'host.docker.internal',
+        port=12345,
+        stdoutToServer=True,
+        stderrToServer=True,
+        suspend=False
+    )
+
+
+def read_db_password():
+    with open("/run/secrets/db_password", "r", encoding="utf-8") as file_stream:
+        return file_stream.read()
+
+
+def get_database_url():
+    config_parser = configparser.ConfigParser()
+    config_parser.read("config/db.ini")
+    database_configuration = config_parser["mysql"]
+
+    database_username = database_configuration["username"]
+    database_password = read_db_password()
+    database = database_configuration["database"]
+
+    database_url = f"mysql://{database_username}:{database_password}@db/{database}"
+    WEB_LOGGER.info(f"Connecting to a database: {database_url}")
+    return database_url
+
 
 app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = "mysql://root:password@db/products"
+app.config["SQLALCHEMY_DATABASE_URI"] = get_database_url()
 db.init_app(app)
 
 
 @app.route("/products")
 def get_products() -> Response:
+    WEB_LOGGER.debug("GET /products/")
     try:
         products = [product.json for product in Product.find_all()]
         return jsonify(products)
@@ -91,14 +127,15 @@ def delete_product(product_id: str):
             return jsonify({
                 "message": f"Product with id {product_id} deleted."}
             ), 200
-        warning_message = f"Product with id {product_id} not found."
-        WEB_LOGGER.warning(warning_message)
-        return warning_message, 404
     except exc.SQLAlchemyError:
         message = f"An exception occurred while deleting product with id: {product_id}."
         WEB_LOGGER.exception(message)
         return message, 500
+    else:
+        warning_message = f"Product with id {product_id} not found."
+        WEB_LOGGER.warning(warning_message)
+        return warning_message, 404
 
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=8000)
+    app.run(debug=False, host="0.0.0.0", port=8000)
